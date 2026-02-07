@@ -1,0 +1,51 @@
+{
+    "version": 10,
+    "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 30,
+    "patch": 2
+  	},
+    "configurePresets": [
+        {
+            "name": "default",
+            "displayName": "Host (Native)",
+            "description": "Configure for native build on the host machine.",
+            "binaryDir": "${sourceDir}/build/host",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "esp32c6",
+            "displayName": "ESP32-C6",
+            "description": "Configure for the ESP32-C6 target using ESP-IDF.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/esp32c6",
+            "toolchainFile": "$env{IDF_PATH}/tools/cmake/toolchain-esp32c6.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "TARGET": "esp32c6"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default",
+            "description": "Build the native host executable."
+        },
+        {
+            "name": "esp32c6",
+            "configurePreset": "esp32c6",
+            "description": "Build the application for the ESP32-C6."
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "default",
+            "configurePreset": "default",
+            "output": {"outputOnFailure": true},
+            "execution": {"noTestsAction": "error"}
+        }
+    ]
+}
