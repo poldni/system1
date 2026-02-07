@@ -19,7 +19,7 @@ static void run_application()
     
     // Buffers for 70ms data interval
     std::array<std::uint8_t, 128> raw_data_buffer{};
-    std::array<std::uint8_t, algo::BleDataPipeline::MaxBleMtu> ble_payload_buffer{};
+    //std::array<std::uint8_t, algo::BleDataPipeline::MaxBleMtu> ble_payload_buffer{};
 
     while (true) {
         // 1. Acquire Data (Example via SPI)
@@ -27,7 +27,7 @@ static void run_application()
         auto result = spi.transfer({}, raw_data_buffer);
 
         // 2. Process Data for BLE
-        auto process_res = algo::BleDataPipeline::process(raw_data_buffer, ble_payload_buffer);
+        //auto process_res = algo::BleDataPipeline::process(raw_data_buffer, ble_payload_buffer);
 
         // 3. Transmit (Logic would go here)
         

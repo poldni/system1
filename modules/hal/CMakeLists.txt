@@ -3,7 +3,7 @@ add_library(hal)
 # Include the parent directory to allow #include "hal/..." usage
 target_include_directories(hal PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-if(IDF_TARGET)
+if("${TARGET}" IN_LIST esp32_targets)
     # ESP32-C6 Implementation
     target_sources(hal PRIVATE
         src/esp32/spi.cpp
