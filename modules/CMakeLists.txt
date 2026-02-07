@@ -9,9 +9,10 @@ add_executable(system1_app apps/main.cpp)
 target_include_directories(system1_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory(algo_pipeline)
+add_subdirectory(hal)
 
 # The application links to the platform-agnostic logic library
-target_link_libraries(system1_app PRIVATE algo_pipeline)
+target_link_libraries(system1_app PRIVATE algo_pipeline hal)
 
 if("${TARGET}" IN_LIST esp32_targets)
    
