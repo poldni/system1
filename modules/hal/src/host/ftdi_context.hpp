@@ -1,8 +1,8 @@
 #pragma once
 
 #include <ftdi.h>
-#include <iostream>
 #include <cstdint>
+#include "hal/logger.hpp"
 
 namespace system1::hal
 {
@@ -25,7 +25,7 @@ public:
 
     FtdiContext() {
         if (ftdi_init(&ctx) < 0) {
-            std::cerr << "Failed to initialize FTDI context" << std::endl;
+            hal::log(LogLevel::Error, "FTDI", "Failed to initialize FTDI context");
         }
     }
 
@@ -46,7 +46,7 @@ public:
         
         if (ftdi_usb_open(&ctx, 0x0403, 0x6014) < 0) {
             if (ftdi_usb_open(&ctx, 0x0403, 0x6010) < 0) {
-                std::cerr << "Failed to open FTDI device: " << ftdi_get_error_string(&ctx) << std::endl;
+                hal::log(LogLevel::Error, "FTDI", "Failed to open FTDI device: {}", ftdi_get_error_string(&ctx));
                 return false;
             }
         }

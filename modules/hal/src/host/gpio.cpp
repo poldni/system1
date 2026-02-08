@@ -33,6 +33,8 @@ GpioPin::GpioPin(int pin_id, Mode mode) : id_(pin_id)
 void GpioPin::set(State state)
 {
     auto& dev = get_ftdi_instance();
+    if (!dev.ensure_connected()) return;
+
     bool is_adbus = (id_ < 8);
     int bit = is_adbus ? id_ : (id_ - 8);
     uint8_t mask = (1 << bit);
@@ -50,6 +52,8 @@ void GpioPin::set(State state)
 GpioPin::State GpioPin::get() const
 {
     auto& dev = get_ftdi_instance();
+    if (!dev.ensure_connected()) return State::Low;
+
     bool is_adbus = (id_ < 8);
     int bit = is_adbus ? id_ : (id_ - 8);
     uint8_t mask = (1 << bit);
@@ -67,7 +71,9 @@ GpioPin::State GpioPin::get() const
     uint8_t val = 0;
     
     if (ftdi_write_data(&dev.ctx, &cmd, 1) == 1) {
-        ftdi_read_data(&dev.ctx, &val, 1);
+        for (int i = 0; i < 5; ++i) {
+            if (ftdi_read_data(&dev.ctx, &val, 1) > 0) break;
+        }
     }
     return (val & mask) ? State::High : State::Low;
 }

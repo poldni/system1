@@ -23,8 +23,9 @@ if("${TARGET}" IN_LIST esp32_targets)
                     # although esptool_py does not generate static library,
                     # processing the component is needed for flashing related
                     # targets and file generation
-                    COMPONENTS freertos driver esptool_py
+                    COMPONENTS freertos driver bt esptool_py nvs_flash esp_phy
                     SDKCONFIG ${CMAKE_SOURCE_DIR}/sdkconfig
+                    SDKCONFIG_DEFAULTS ${CMAKE_SOURCE_DIR}/sdkconfig.defaults
                     BUILD_DIR ${CMAKE_BINARY_DIR})
 
     # Create a BSP library for ESP32. This library contains all
@@ -37,9 +38,11 @@ if("${TARGET}" IN_LIST esp32_targets)
                                             idf::esp_driver_uart
                                             idf::esp_driver_gpio 
                                             idf::esp_driver_ledc
-                                            idf::esp_hw_support 
+                                            idf::esp_hw_support
+                                            idf::bt 
                                             idf::log 
-                                            idf::freertos)
+                                            idf::freertos
+                                            idf::nvs_flash)
 
     # Explicitly add the definition to the application target. This is often
     # needed to help IDEs and IntelliSense engines recognize the definition.

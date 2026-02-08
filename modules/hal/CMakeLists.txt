@@ -9,6 +9,8 @@ if("${TARGET}" IN_LIST esp32_targets)
         src/esp32/spi.cpp
         src/esp32/uart.cpp
         src/esp32/gpio.cpp
+        src/esp32/logger.cpp
+        src/esp32/ble.cpp
     )
     
     # Link against ESP-IDF drivers
@@ -17,6 +19,7 @@ if("${TARGET}" IN_LIST esp32_targets)
         idf::esp_driver_gpio 
         idf::esp_driver_spi 
         idf::esp_driver_uart
+        idf::bt
     )
 else()
     # Host (FT232H) Implementation
@@ -24,6 +27,8 @@ else()
         src/host/spi.cpp
         src/host/uart.cpp
         src/host/gpio.cpp
+        src/host/logger.cpp
+        src/host/ble.cpp
     )
     
     find_package(PkgConfig REQUIRED)

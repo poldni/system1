@@ -1,38 +1,37 @@
 #include "platform.hpp"
-#include "algo_pipeline/pipeline.hpp"
+#include "data_processor.hpp"
 #include "hal/spi.hpp"
 #include "hal/uart.hpp"
 #include "hal/gpio.hpp"
+#include "hal/ble.hpp"
 
 #include <array>
 #include <cstdint>
 #include <thread>
 #include <chrono>
 
-static void run_application()
-{
-    using namespace system1;
+#if defined(IDF_TARGET)
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <nvs_flash.h>
+#endif
 
-    // Static allocation of resources (No Heap)
-    hal::SpiMaster spi;
-    hal::UartDevice uart;
-    
-    // Buffers for 70ms data interval
-    std::array<std::uint8_t, 128> raw_data_buffer{};
-    //std::array<std::uint8_t, algo::BleDataPipeline::MaxBleMtu> ble_payload_buffer{};
+static void run_application(system1::app::Platform& platform)
+{
+    // Instantiate DataProcessor with the specific HAL interfaces
+    // CTAD will deduce the template arguments from the constructor arguments
+    system1::app::DataProcessor processor(platform.spi(), platform.ble());
 
     while (true) {
-        // 1. Acquire Data (Example via SPI)
-        // In a real RTOS scenario, this might wait on a semaphore or task notification
-        auto result = spi.transfer({}, raw_data_buffer);
+        // Execute one cycle of data acquisition, processing, and transmission
+        processor.step();
 
-        // 2. Process Data for BLE
-        //auto process_res = algo::BleDataPipeline::process(raw_data_buffer, ble_payload_buffer);
-
-        // 3. Transmit (Logic would go here)
-        
         // 70ms cycle
+#if defined(IDF_TARGET)
+        vTaskDelay(pdMS_TO_TICKS(70));
+#else
         std::this_thread::sleep_for(std::chrono::milliseconds(70));
+#endif
     }
 }
 
@@ -40,13 +39,24 @@ static void run_application()
 // Entry point for ESP-IDF
 extern "C" void app_main()
 {
-    run_application();
+    // Initialize NVS (Required for Bluetooth)
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // Platform initialization (HAL drivers)
+    static system1::app::Platform platform;
+    run_application(platform);
 }
 #else
 // Entry point for Host (Windows, Linux)
 int main()
 {
-    run_application();
+    system1::app::Platform platform;
+    run_application(platform);
     return 0;
 }
 #endif
