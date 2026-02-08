@@ -5,9 +5,27 @@
 #include <array>
 #include <span>
 #include <cstdint>
+#include <concepts>
+#include <optional>
+#include "hal/spi.hpp"
+#include "hal/ble.hpp"
+#include "hal/logger.hpp"
 
 namespace system1::app
 {
+
+// Concept for SPI Driver
+template<typename T>
+concept SpiDriverConcept = requires(T& t, std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) {
+    { t.transfer(tx, rx) } -> std::convertible_to<std::expected<void, hal::SpiError>>;
+};
+
+// Concept for BLE Driver
+template<typename T>
+concept BleDriverConcept = requires(T& t, std::span<const std::uint8_t> data) {
+    { t.send(data) } -> std::convertible_to<std::expected<void, hal::BleError>>;
+    { t.get_pending_settings() } -> std::same_as<std::optional<hal::DeviceSettings>>;
+};
 
 /**
  * @brief Orchestrates data acquisition, processing, and transmission.
@@ -16,7 +34,7 @@ namespace system1::app
  * for dependency injection. This enables unit testing with mocks and zero-overhead
  * static polymorphism for the target build.
  */
-template <typename SpiDriver, typename BleDriver>
+template <SpiDriverConcept SpiDriver, BleDriverConcept BleDriver>
 class DataProcessor
 {
 public:
@@ -34,6 +52,12 @@ public:
      */
     void step()
     {
+        // 0. Check for settings updates
+        if (auto settings = ble_.get_pending_settings()) {
+            current_settings_ = *settings;
+            hal::log(hal::LogLevel::Info, "DataProcessor", "Settings updated: sensitivity={}", static_cast<int>(current_settings_.sensitivity));
+        }
+
         // 1. Acquire Data
         // Buffer for raw data from System2
         std::array<std::uint8_t, 128> raw_data_buffer;
@@ -42,25 +66,33 @@ public:
         auto spi_result = spi_.transfer({}, raw_data_buffer);
         
         if (!spi_result) {
-            // In a real app, we might log the error here
+            hal::log(hal::LogLevel::Error, "DataProcessor", "SPI transfer failed");
             return;
         }
 
         // 2. Process Data
         std::array<std::uint8_t, algo::BleDataPipeline::MaxBleMtu> ble_payload_buffer;
-        auto process_result = algo::BleDataPipeline::process(raw_data_buffer, ble_payload_buffer);
+        auto process_result = algo::BleDataPipeline::process(raw_data_buffer, ble_payload_buffer, current_settings_.sensitivity);
+
+        if (!process_result) {
+            hal::log(hal::LogLevel::Error, "DataProcessor", "Pipeline processing error");
+            return;
+        }
 
         // 3. Transmit if we have valid data
-        if (process_result && *process_result > 0) {
+        if (*process_result > 0) {
             // Create a span of the valid data portion and send it
             auto payload_span = std::span(ble_payload_buffer).first(*process_result);
-            ble_.send(payload_span);
+            if (auto result = ble_.send(payload_span); !result) {
+                hal::log(hal::LogLevel::Warning, "DataProcessor", "BLE send failed");
+            }
         }
     }
 
 private:
     SpiDriver& spi_;
     BleDriver& ble_;
+    hal::DeviceSettings current_settings_{ .sensitivity = 50, .led_brightness = 128, .reporting_interval_ms = 70 };
 };
 
 } // namespace system1::app

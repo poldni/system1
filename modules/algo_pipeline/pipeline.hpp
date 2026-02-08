@@ -33,11 +33,13 @@ public:
      * 
      * @param input Raw data received from System2 (e.g., via SPI/UART).
      * @param output Buffer to store the processed BLE payload. Must be at least input.size().
+     * @param sensitivity Sensitivity threshold for the algorithm (0-255).
      * @return std::expected<std::size_t, PipelineError> Number of bytes written to output on success.
      */
     static std::expected<std::size_t, PipelineError> process(
         std::span<const std::uint8_t> input, 
-        std::span<std::uint8_t> output
+        std::span<std::uint8_t> output,
+        std::uint8_t sensitivity
     );
 };
 

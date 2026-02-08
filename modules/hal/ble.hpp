@@ -4,9 +4,16 @@
 #include <cstdint>
 #include <span>
 #include <expected>
+#include <optional>
 
 namespace system1::hal
 {
+
+struct __attribute__((packed)) DeviceSettings {
+    uint8_t sensitivity;
+    uint8_t led_brightness;
+    uint16_t reporting_interval_ms;
+};
 
 enum class BleError
 {
@@ -23,6 +30,9 @@ public:
     
     // Send data via BLE Notification
     std::expected<void, BleError> send(std::span<const std::uint8_t> data);
+
+    // Check for pending settings updates received from the client
+    std::optional<DeviceSettings> get_pending_settings();
     
     bool is_connected() const;
 };

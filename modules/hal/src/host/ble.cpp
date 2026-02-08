@@ -20,6 +20,11 @@ std::expected<void, BleError> BleSender::send(std::span<const std::uint8_t> data
     return {};
 }
 
+std::optional<DeviceSettings> BleSender::get_pending_settings()
+{
+    return std::nullopt; // No settings updates on host simulation
+}
+
 bool BleSender::is_connected() const
 {
     return true; // Always simulate connected on host

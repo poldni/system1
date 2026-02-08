@@ -1,4 +1,5 @@
 #include "hal/ble.hpp"
+#include "hal/ble_profile.hpp"
 #include "hal/logger.hpp"
 
 // Workaround for missing configuration symbol in ESP-IDF NimBLE port
@@ -16,6 +17,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <cstring>
+#include <mutex>
+#include <optional>
 
 namespace system1::hal
 {
@@ -26,7 +29,15 @@ namespace
     bool g_stack_initialized = false;
     bool g_device_connected = false;
     uint16_t g_conn_handle = BLE_HS_CONN_HANDLE_NONE;
-    uint16_t g_attr_handle = 0;
+    
+    // Attribute Handles
+    uint16_t g_tracking_handle = 0;
+    uint16_t g_settings_handle = 0;
+
+    // Settings synchronization
+    std::mutex g_settings_mutex;
+    std::optional<DeviceSettings> g_pending_settings;
+    DeviceSettings g_current_settings = { .sensitivity = 50, .led_brightness = 128, .reporting_interval_ms = 70 };
 
     // Task Resources for NimBLE Host
     constexpr size_t BLE_HOST_STACK_SIZE = 4096;
@@ -34,32 +45,51 @@ namespace
     StaticTask_t g_ble_host_task_tcb;
 
     // UUIDs
-    // Service: 59 5a 08 e4 - 86 2a - 46 34 - 8d 99 - 39 16 57 76 dd 5a
-    // Char:    59 5a 08 e5 - ...
-    const ble_uuid128_t g_svc_uuid = BLE_UUID128_INIT(
-        0x5a, 0xdd, 0x76, 0x57, 0x16, 0x39, 0x99, 0x8d,
-        0x34, 0x46, 0x2a, 0x86, 0xe4, 0x08, 0x5a, 0x59);
+    // Helper to convert Big Endian std::array to Little Endian ble_uuid128_t required by NimBLE
+    ble_uuid128_t make_uuid128(const std::array<std::uint8_t, 16>& uuid_bytes) {
+        ble_uuid128_t uuid;
+        uuid.u.type = BLE_UUID_TYPE_128;
+        for (size_t i = 0; i < 16; ++i) {
+            uuid.value[i] = uuid_bytes[15 - i];
+        }
+        return uuid;
+    }
 
-    const ble_uuid128_t g_chr_uuid = BLE_UUID128_INIT(
-        0x5a, 0xdd, 0x76, 0x57, 0x16, 0x39, 0x99, 0x8d,
-        0x34, 0x46, 0x2a, 0x86, 0xe5, 0x08, 0x5a, 0x59);
+    const ble_uuid128_t g_svc_uuid = make_uuid128(BleProfile::ServiceUuid);
+    const ble_uuid128_t g_tracking_uuid = make_uuid128(BleProfile::TrackingDataCharUuid);
+    const ble_uuid128_t g_settings_uuid = make_uuid128(BleProfile::SettingsCharUuid);
 
     int gatt_svr_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                            struct ble_gatt_access_ctxt *ctxt, void *arg)
     {
-        // Handle Write Request from Phone
-        if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
-            // Access the data sent by the phone
-            // uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
-            // void *data = ctxt->om->om_data;
-            
-            // Log receiving data (Example)
-            hal::log(LogLevel::Info, "BLE", "Received Write Request");
-            
-            return 0; // Success
+        const ble_uuid_t* uuid = ctxt->chr->uuid;
+
+        // Handle Settings Characteristic
+        if (ble_uuid_cmp(uuid, &g_settings_uuid.u) == 0) {
+            std::lock_guard lock(g_settings_mutex);
+
+            if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
+                // Respond with current settings
+                int rc = os_mbuf_append(ctxt->om, &g_current_settings, sizeof(g_current_settings));
+                return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+            } 
+            else if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
+                if (OS_MBUF_PKTLEN(ctxt->om) == sizeof(DeviceSettings)) {
+                    DeviceSettings settings;
+                    // Copy data from mbuf to struct
+                    int rc = os_mbuf_copydata(ctxt->om, 0, sizeof(DeviceSettings), &settings);
+                    if (rc == 0) {
+                        g_current_settings = settings;
+                        g_pending_settings = settings;
+                        hal::log(LogLevel::Info, "BLE", "Received Settings Update");
+                        return 0;
+                    }
+                }
+                return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+            }
         }
 
-        return 0; // No read/write supported, only notify
+        return BLE_ATT_ERR_UNLIKELY;
     }
 
     const struct ble_gatt_svc_def g_gatt_svcs[] = {
@@ -68,10 +98,16 @@ namespace
             .uuid = &g_svc_uuid.u,
             .characteristics = (struct ble_gatt_chr_def[]){
                 {
-                    .uuid = &g_chr_uuid.u,
+                    .uuid = &g_tracking_uuid.u,
                     .access_cb = gatt_svr_access_cb,
-                    .flags = BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_WRITE,
-                    .val_handle = &g_attr_handle,
+                    .flags = BLE_GATT_CHR_F_NOTIFY,
+                    .val_handle = &g_tracking_handle,
+                },
+                {
+                    .uuid = &g_settings_uuid.u,
+                    .access_cb = gatt_svr_access_cb,
+                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY,
+                    .val_handle = &g_settings_handle,
                 },
                 {0} // No more characteristics
             },
@@ -208,12 +244,20 @@ std::expected<void, BleError> BleSender::send(std::span<const std::uint8_t> data
         return std::unexpected(BleError::InternalError);
     }
 
-    int rc = ble_gattc_notify_custom(g_conn_handle, g_attr_handle, om);
+    int rc = ble_gattc_notify_custom(g_conn_handle, g_tracking_handle, om);
     if (rc != 0) {
         return std::unexpected(BleError::TransmissionFailed);
     }
 
     return {};
+}
+
+std::optional<DeviceSettings> BleSender::get_pending_settings()
+{
+    std::lock_guard lock(g_settings_mutex);
+    auto settings = g_pending_settings;
+    g_pending_settings.reset(); // Clear after reading
+    return settings;
 }
 
 bool BleSender::is_connected() const { return g_device_connected; }

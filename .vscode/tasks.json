@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: Flash Project",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/esp32c6",
+                "--target",
+                "flash"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "CMake: Monitor",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "${workspaceFolder}/build/esp32c6",
+                "--target",
+                "monitor"
+            ],
+            "isBackground": false,
+            "problemMatcher": []
+        }
+    ]
+}

@@ -10,9 +10,11 @@ namespace system1::app
 {
 
 // Platform-specific Pin Definitions
+// These constants map abstract functions to physical pins based on the build target.
 #if defined(IDF_TARGET)
     // ESP32-C6 Target
-    // SPI/UART pins are defined in their respective HAL implementation files
+    // Note: SPI/UART pins are defined internally in their respective HAL implementation files
+    // or via Kconfig, but GPIOs for simple peripherals are defined here.
     constexpr int PIN_LED_RED   = 8;
     constexpr int PIN_LED_RGB_R = 20;
     constexpr int PIN_LED_RGB_G = 21;
@@ -20,10 +22,8 @@ namespace system1::app
     constexpr int PIN_BUZZER    = 12;
     constexpr int PIN_BUTTON    = 9;
 #else
-    // Host Target (FTDI)
-    // ADBUS 0-3: SPI (SCK, DO, DI, CS)
-    // ACBUS 0: UART TX (Pin 8)
-    
+    // Host Target (e.g., FTDI MPSSE on Windows/Linux)
+    // Mapping corresponds to FTDI ADBUS/ACBUS lines
     constexpr int PIN_LED_RED   = 4;  // ADBUS4
     constexpr int PIN_LED_RGB_R = 5;  // ADBUS5
     constexpr int PIN_LED_RGB_G = 6;  // ADBUS6
@@ -35,8 +35,10 @@ namespace system1::app
 /**
  * @brief Platform abstraction that aggregates hardware resources.
  * 
- * This class instantiates and holds references to the HAL drivers.
- * It serves as the root of the dependency graph for the application.
+ * This class instantiates and holds references to the concrete HAL drivers.
+ * It ensures that hardware resources are initialized in a deterministic order
+ * (declaration order) and provides accessors for dependency injection into
+ * application components like DataProcessor.
  */
 class Platform
 {
@@ -54,11 +56,16 @@ public:
     {
     }
 
-    // Delete copy/move to ensure single instance semantics
+    // Delete copy/move to ensure single instance semantics and hardware exclusivity
     Platform(const Platform&) = delete;
     Platform& operator=(const Platform&) = delete;
+    Platform(Platform&&) = delete;
+    Platform& operator=(Platform&&) = delete;
 
     // Accessors for HAL instances
+    // These return references to the concrete driver types, which satisfy
+    // the concepts required by DataProcessor (SpiDriverConcept, BleDriverConcept).
+    
     hal::SpiMaster& spi() { return spi_; }
     hal::UartDevice& uart() { return uart_; }
     hal::BleSender& ble() { return ble_; }
@@ -71,10 +78,13 @@ public:
     hal::GpioPin& button() { return button_; }
 
 private:
+    // Hardware Drivers
+    // Order of declaration determines order of initialization.
     hal::SpiMaster spi_;
     hal::UartDevice uart_;
     hal::BleSender ble_;
     
+    // GPIO Peripherals
     hal::GpioPin led_red_;
     hal::GpioPin led_rgb_r_;
     hal::GpioPin led_rgb_g_;
