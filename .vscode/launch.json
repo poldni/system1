@@ -1,0 +1,54 @@
+// /home/ronny/projects/git/system1/.vscode/launch.json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Host (Linux)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/host/modules/apps/system1_app",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "Build Host"
+        },
+        {
+            "name": "Debug ESP32-C6 (OpenOCD)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/esp32c6/modules/system1_app",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "riscv32-esp-elf-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "setupCommands": [
+                { "text": "file ${workspaceFolder}/build/esp32c6/modules/system1_app" },
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                { "text": "target extended-remote :3333" },
+                {
+                    "text": "mon reset halt",
+                    "description": "Reset the chip and halt"
+                },
+                { "text": "maintenance flush register-cache" },
+                {
+                    "text": "thb app_main",
+                    "description": "Set temporary hardware breakpoint at app_main"
+                }
+            ]
+        }
+    ]
+}

@@ -27,11 +27,14 @@ std::expected<std::size_t, PipelineError> BleDataPipeline::process(
     // Filter out packets where the strongest signal (max byte value)
     // does not exceed the sensitivity threshold.
     uint8_t max_val = 0;
+    bool all_ones = true; // Check for disconnected SPI (floating high often reads 0xFF)
+
     for (const auto b : input) {
         if (b > max_val) max_val = b;
+        if (b != 0xFF) all_ones = false;
     }
 
-    if (max_val == 0 || max_val < sensitivity) {
+    if (max_val == 0 || max_val < sensitivity || all_ones) {
         return 0; // Signal too weak or empty, do not send
     }
 

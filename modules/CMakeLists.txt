@@ -1,18 +1,8 @@
 
 set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
-# --- Application Executable ---
-add_executable(system1_app apps/main.cpp)
-
-# Add the current directory (modules) to the include path for all targets below it.
-# This allows for includes like "hal/gpio.hpp" and "common/span.hpp".
-target_include_directories(system1_app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
 add_subdirectory(algo_pipeline)
 add_subdirectory(hal)
-
-# The application links to the platform-agnostic logic library
-target_link_libraries(system1_app PRIVATE algo_pipeline hal)
 
 if("${TARGET}" IN_LIST esp32_targets)
    
@@ -44,11 +34,14 @@ if("${TARGET}" IN_LIST esp32_targets)
                                             idf::freertos
                                             idf::nvs_flash)
 
+endif()
+
+add_subdirectory(apps)
+
+if("${TARGET}" IN_LIST esp32_targets)
     # Explicitly add the definition to the application target. This is often
     # needed to help IDEs and IntelliSense engines recognize the definition.
     target_compile_definitions(system1_app PRIVATE -DIDF_TARGET="${TARGET}")
-    # The main application links to the specific BSP for this target
-    target_link_libraries(system1_app PRIVATE bsp_esp32)
 
     # This ESP-IDF function handles component dependencies, final linking, flashing, etc.
     idf_build_executable(system1_app)

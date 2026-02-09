@@ -1,106 +1,149 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <vector>
+#include <algorithm>
+#include <iostream>
+
 #include "apps/data_processor.hpp"
 #include "hal/spi.hpp"
 #include "hal/ble.hpp"
-#include <algorithm>
+
+// --- Dummy Logger Implementation ---
+// Required to satisfy the linker as DataProcessor calls hal::log
+namespace system1::hal {
+    void log_write(LogLevel level, std::string_view tag, std::string_view message, const std::source_location& loc) {
+        // Uncomment to see logs during test execution
+        // std::cout << "[" << tag << "] " << message << "\n";
+    }
+}
+
+namespace system1::app::test {
 
 using namespace testing;
-using namespace system1;
+using namespace system1::hal;
 
 // --- Mock Classes ---
-// These classes satisfy the implicit interface required by DataProcessor template
 
-class MockSpiMaster {
+class MockSpiDriver {
 public:
-    MOCK_METHOD(std::expected<void, hal::SpiError>, transfer, 
+    // Mocking the transfer method. 
+    // Note: Parentheses around return type are required because of the comma in std::expected.
+    MOCK_METHOD((std::expected<void, SpiError>), transfer, 
                 (std::span<const std::uint8_t>, std::span<std::uint8_t>));
 };
 
-class MockBleSender {
+class MockBleDriver {
 public:
-    MOCK_METHOD(std::expected<void, hal::BleError>, send, 
+    MOCK_METHOD((std::expected<void, BleError>), send, 
                 (std::span<const std::uint8_t>));
+    
+    MOCK_METHOD(std::optional<DeviceSettings>, get_pending_settings, ());
 };
+
+// --- Custom Actions & Matchers ---
+
+// Action to fill the RX buffer (2nd argument of transfer) with a specific byte value
+ACTION_P(FillRxBuffer, fill_value) {
+    std::span<uint8_t> rx_span = arg1;
+    std::fill(rx_span.begin(), rx_span.end(), fill_value);
+}
+
+// Matcher to verify the content of a std::span passed to send()
+MATCHER_P(SpanHasValue, value, "") {
+    // arg is std::span<const uint8_t>
+    if (arg.empty()) return false;
+    return std::all_of(arg.begin(), arg.end(), [value](uint8_t b){ return b == value; });
+}
 
 // --- Test Fixture ---
 
 class DataProcessorTest : public Test {
 protected:
-    MockSpiMaster mock_spi;
-    MockBleSender mock_ble;
-    app::DataProcessor<MockSpiMaster, MockBleSender> processor{mock_spi, mock_ble};
+    // Use StrictMock to ensure no uninteresting calls happen (e.g., unexpected BLE sends)
+    StrictMock<MockSpiDriver> spi;
+    StrictMock<MockBleDriver> ble;
+    
+    // Instantiate DataProcessor with Mock types
+    DataProcessor<MockSpiDriver, MockBleDriver> processor{spi, ble};
 };
 
 // --- Tests ---
 
-TEST_F(DataProcessorTest, SuccessfulCycle_TransmitsData) {
-    // 1. Expect SPI transfer to be called.
-    // We use a lambda action to simulate the hardware filling the RX buffer.
-    EXPECT_CALL(mock_spi, transfer(_, _))
-        .WillOnce([](std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) {
-            // Simulate receiving valid data (0xAB pattern)
-            std::fill(rx.begin(), rx.end(), 0xAB);
-            return std::expected<void, hal::SpiError>{};
-        });
+TEST_F(DataProcessorTest, Step_NormalFlow_HighSignal) {
+    // 1. No settings update
+    EXPECT_CALL(ble, get_pending_settings())
+        .WillOnce(Return(std::nullopt));
 
-    // 2. Expect BLE send to be called with the processed data.
-    // Since BleDataPipeline is a pass-through for non-zero data, we expect 0xAB.
-    EXPECT_CALL(mock_ble, send(_))
-        .WillOnce([](std::span<const std::uint8_t> data) {
-            EXPECT_FALSE(data.empty());
-            EXPECT_EQ(data.size(), 128); // Input buffer size
-            EXPECT_EQ(data[0], 0xAB);
-            return std::expected<void, hal::BleError>{};
-        });
+    // 2. SPI Transfer succeeds and returns strong signal (100 > default sensitivity 50)
+    EXPECT_CALL(spi, transfer(_, _))
+        .WillOnce(DoAll(FillRxBuffer(100), Return(std::expected<void, SpiError>{})));
 
-    // Execute the step
-    processor.step();
-}
-
-TEST_F(DataProcessorTest, SpiFailure_DoesNotTransmit) {
-    // Simulate SPI Bus Error
-    EXPECT_CALL(mock_spi, transfer(_, _))
-        .WillOnce(Return(std::unexpected(hal::SpiError::BusError)));
-
-    // BLE send should NOT be called
-    EXPECT_CALL(mock_ble, send(_)).Times(0);
+    // 3. Expect BLE send to be called with the processed data
+    // The pipeline copies input to output, so we expect 100s.
+    EXPECT_CALL(ble, send(SpanHasValue(100)))
+        .WillOnce(Return(std::expected<void, BleError>{}));
 
     processor.step();
 }
 
-TEST_F(DataProcessorTest, EmptyData_DoesNotTransmit) {
-    // Simulate receiving all zeros (which BleDataPipeline filters out)
-    EXPECT_CALL(mock_spi, transfer(_, _))
-        .WillOnce([](std::span<const std::uint8_t>, std::span<std::uint8_t> rx) {
-            std::fill(rx.begin(), rx.end(), 0x00);
-            return std::expected<void, hal::SpiError>{};
-        });
+TEST_F(DataProcessorTest, Step_Filtered_LowSignal) {
+    // 1. No settings update
+    EXPECT_CALL(ble, get_pending_settings())
+        .WillOnce(Return(std::nullopt));
 
-    // BLE send should NOT be called because pipeline returns 0 bytes
-    EXPECT_CALL(mock_ble, send(_)).Times(0);
+    // 2. SPI Transfer succeeds but returns weak signal (10 < default sensitivity 50)
+    EXPECT_CALL(spi, transfer(_, _))
+        .WillOnce(DoAll(FillRxBuffer(10), Return(std::expected<void, SpiError>{})));
 
-    processor.step();
-}
-
-TEST_F(DataProcessorTest, PipelineError_DoesNotTransmit) {
-    // Simulate a scenario where pipeline might fail (though hard to trigger with current simple pipeline)
-    // We can simulate this by mocking the SPI to return data that might cause issues if the pipeline logic changes,
-    // but for now, we rely on the fact that if process() returns error, send() isn't called.
-    // Since we can't easily mock the static BleDataPipeline::process, we rely on its behavior.
-    // If we pass an empty buffer (simulated by 0 size span from SPI?), the pipeline returns 0.
-    
-    EXPECT_CALL(mock_spi, transfer(_, _))
-        .WillOnce([](std::span<const std::uint8_t>, std::span<std::uint8_t> rx) {
-            // Just return success but we assume the buffer is in a state that pipeline handles.
-            // The DataProcessor allocates a fixed 128 byte buffer, so it's never empty.
-            // This test primarily verifies the flow control logic in DataProcessor::step.
-            return std::expected<void, hal::SpiError>{};
-        });
-
-    // If we assume normal data, send is called.
-    // To strictly test the "if (process_res)" check, we rely on the EmptyData test above.
-    EXPECT_CALL(mock_ble, send(_)).Times(1);
+    // 3. Expect BLE send to NOT be called (StrictMock will enforce this)
     
     processor.step();
 }
+
+TEST_F(DataProcessorTest, Step_SettingsUpdate_ChangesSensitivity) {
+    // 1. Settings update: Increase sensitivity threshold to 200
+    DeviceSettings new_settings;
+    new_settings.sensitivity = 200;
+    
+    EXPECT_CALL(ble, get_pending_settings())
+        .WillOnce(Return(new_settings));
+
+    // 2. SPI Transfer returns signal (100). 
+    // This is > old default (50) but < new sensitivity (200).
+    EXPECT_CALL(spi, transfer(_, _))
+        .WillOnce(DoAll(FillRxBuffer(100), Return(std::expected<void, SpiError>{})));
+
+    // 3. Expect BLE send to NOT be called because 100 < 200
+    
+    processor.step();
+}
+
+TEST_F(DataProcessorTest, Step_SpiError_NoProcessing) {
+    EXPECT_CALL(ble, get_pending_settings())
+        .WillOnce(Return(std::nullopt));
+
+    // 1. SPI Transfer fails
+    EXPECT_CALL(spi, transfer(_, _))
+        .WillOnce(Return(std::unexpected(SpiError::BusError)));
+
+    // 2. Expect BLE send to NOT be called
+    
+    processor.step();
+}
+
+TEST_F(DataProcessorTest, Step_BleError_HandledGracefully) {
+    EXPECT_CALL(ble, get_pending_settings())
+        .WillOnce(Return(std::nullopt));
+
+    EXPECT_CALL(spi, transfer(_, _))
+        .WillOnce(DoAll(FillRxBuffer(200), Return(std::expected<void, SpiError>{})));
+
+    // 1. BLE Send fails
+    EXPECT_CALL(ble, send(_))
+        .WillOnce(Return(std::unexpected(BleError::TransmissionFailed)));
+
+    // 2. Processor should catch error and log it (verified by not crashing/throwing)
+    processor.step();
+}
+
+} // namespace system1::app::test

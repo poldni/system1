@@ -244,8 +244,9 @@ std::expected<void, BleError> BleSender::send(std::span<const std::uint8_t> data
         return std::unexpected(BleError::InternalError);
     }
 
-    int rc = ble_gattc_notify_custom(g_conn_handle, g_tracking_handle, om);
+    int rc = ble_gatts_notify_custom(g_conn_handle, g_tracking_handle, om);
     if (rc != 0) {
+        os_mbuf_free_chain(om); // Free the mbuf if transmission failed to prevent memory leaks
         return std::unexpected(BleError::TransmissionFailed);
     }
 

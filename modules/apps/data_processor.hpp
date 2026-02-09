@@ -70,6 +70,7 @@ public:
             return;
         }
 
+        raw_data_buffer.at(0) = 101;
         // 2. Process Data
         std::array<std::uint8_t, algo::BleDataPipeline::MaxBleMtu> ble_payload_buffer;
         auto process_result = algo::BleDataPipeline::process(raw_data_buffer, ble_payload_buffer, current_settings_.sensitivity);
