@@ -85,7 +85,9 @@ public:
             // Create a span of the valid data portion and send it
             auto payload_span = std::span(ble_payload_buffer).first(*process_result);
             if (auto result = ble_.send(payload_span); !result) {
-                hal::log(hal::LogLevel::Warning, "DataProcessor", "BLE send failed");
+                if (result.error() != hal::BleError::NotConnected) {
+                    hal::log(hal::LogLevel::Warning, "DataProcessor", "BLE send failed");
+                }
             }
         }
     }

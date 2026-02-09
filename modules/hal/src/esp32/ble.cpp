@@ -41,7 +41,7 @@ namespace
 
     // Task Resources for NimBLE Host
     constexpr size_t BLE_HOST_STACK_SIZE = 4096;
-    StackType_t g_ble_host_stack[BLE_HOST_STACK_SIZE];
+    alignas(16) StackType_t g_ble_host_stack[BLE_HOST_STACK_SIZE];
     StaticTask_t g_ble_host_task_tcb;
 
     // UUIDs

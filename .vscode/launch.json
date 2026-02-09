@@ -26,29 +26,22 @@
             "name": "Debug ESP32-C6 (OpenOCD)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/esp32c6/modules/system1_app",
+            "program": "${workspaceFolder}/build/esp32c6/modules/apps/system1_app",
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "riscv32-esp-elf-gdb",
             "miDebuggerServerAddress": "localhost:3333",
             "setupCommands": [
-                { "text": "file ${workspaceFolder}/build/esp32c6/modules/system1_app" },
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
+                { "text": "file ${workspaceFolder}/build/esp32c6/modules/apps/system1_app" },
                 { "text": "target extended-remote :3333" },
-                {
-                    "text": "mon reset halt",
-                    "description": "Reset the chip and halt"
-                },
+                { "text": "mon reset halt" },
                 { "text": "maintenance flush register-cache" },
-                {
-                    "text": "thb app_main",
-                    "description": "Set temporary hardware breakpoint at app_main"
-                }
-            ]
+                { "text": "thb app_main" }
+            ],
+            "showDisplayString": true,
+            "externalConsole": false,
+            "stopAtEntry": true, // Let VS Code handle the first "continue"    
+            "logging": { "engineLogging": true } // This WILL force text to appear now
         }
     ]
 }
