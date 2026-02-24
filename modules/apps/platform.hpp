@@ -45,14 +45,14 @@ class Platform
 public:
     Platform()
         : spi_()
-        , uart_()
+        //, uart_()
         , ble_()
-        , led_red_(PIN_LED_RED, hal::GpioPin::Mode::Pwm)
-        , led_rgb_r_(PIN_LED_RGB_R, hal::GpioPin::Mode::Pwm)
-        , led_rgb_g_(PIN_LED_RGB_G, hal::GpioPin::Mode::Pwm)
-        , led_rgb_b_(PIN_LED_RGB_B, hal::GpioPin::Mode::Pwm)
-        , buzzer_(PIN_BUZZER, hal::GpioPin::Mode::Pwm)
-        , button_(PIN_BUTTON, hal::GpioPin::Mode::Input)
+        //, led_red_(PIN_LED_RED, hal::GpioPin::Mode::Pwm)
+        //, led_rgb_r_(PIN_LED_RGB_R, hal::GpioPin::Mode::Pwm)
+        //, led_rgb_g_(PIN_LED_RGB_G, hal::GpioPin::Mode::Pwm)
+        //, led_rgb_b_(PIN_LED_RGB_B, hal::GpioPin::Mode::Pwm)
+        //, buzzer_(PIN_BUZZER, hal::GpioPin::Mode::Pwm)
+        //, button_(PIN_BUTTON, hal::GpioPin::Mode::Input)
     {
     }
 
@@ -67,30 +67,30 @@ public:
     // the concepts required by DataProcessor (SpiDriverConcept, BleDriverConcept).
     
     hal::SpiMaster& spi() { return spi_; }
-    hal::UartDevice& uart() { return uart_; }
+    //hal::UartDevice& uart() { return uart_; }
     hal::BleSender& ble() { return ble_; }
     
-    hal::GpioPin& led_red() { return led_red_; }
-    hal::GpioPin& led_rgb_r() { return led_rgb_r_; }
-    hal::GpioPin& led_rgb_g() { return led_rgb_g_; }
-    hal::GpioPin& led_rgb_b() { return led_rgb_b_; }
-    hal::GpioPin& buzzer() { return buzzer_; }
-    hal::GpioPin& button() { return button_; }
+    // hal::GpioPin& led_red() { return led_red_; }
+    // hal::GpioPin& led_rgb_r() { return led_rgb_r_; }
+    // hal::GpioPin& led_rgb_g() { return led_rgb_g_; }
+    // hal::GpioPin& led_rgb_b() { return led_rgb_b_; }
+    // hal::GpioPin& buzzer() { return buzzer_; }
+    // hal::GpioPin& button() { return button_; }
 
 private:
     // Hardware Drivers
     // Order of declaration determines order of initialization.
     hal::SpiMaster spi_;
-    hal::UartDevice uart_;
+    //hal::UartDevice uart_;
     hal::BleSender ble_;
     
     // GPIO Peripherals
-    hal::GpioPin led_red_;
-    hal::GpioPin led_rgb_r_;
-    hal::GpioPin led_rgb_g_;
-    hal::GpioPin led_rgb_b_;
-    hal::GpioPin buzzer_;
-    hal::GpioPin button_;
+    // hal::GpioPin led_red_;
+    // hal::GpioPin led_rgb_r_;
+    // hal::GpioPin led_rgb_g_;
+    // hal::GpioPin led_rgb_b_;
+    // hal::GpioPin buzzer_;
+    // hal::GpioPin button_;
 };
 
 } // namespace system1::app

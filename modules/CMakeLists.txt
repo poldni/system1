@@ -13,7 +13,7 @@ if("${TARGET}" IN_LIST esp32_targets)
                     # although esptool_py does not generate static library,
                     # processing the component is needed for flashing related
                     # targets and file generation
-                    COMPONENTS freertos driver bt esptool_py nvs_flash esp_phy
+                    COMPONENTS freertos driver bt esptool_py nvs_flash
                     SDKCONFIG ${CMAKE_SOURCE_DIR}/sdkconfig
                     SDKCONFIG_DEFAULTS ${CMAKE_SOURCE_DIR}/sdkconfig.defaults
                     BUILD_DIR ${CMAKE_BINARY_DIR})

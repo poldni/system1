@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.30)
 
 set(esp32_targets "esp32" "esp32c3" "esp32c6" "esp32p4")
+set(TARGET "esp32c6" CACHE STRING "Specify the target ESP32 variant (e.g., esp32, esp32c3, esp32c6, esp32p4)")
 
 if("${TARGET}" IN_LIST esp32_targets)
     # For ESP-IDF builds, the toolchain must be included BEFORE the project() call.
